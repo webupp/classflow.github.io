@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard Académico</title>
+    <style>
+        :root {
+            --primary: #10864f;
+            --bg: #fbfbfb;
+            --card: #ffffff;
+            --text: #1e293b;
+            --edit: #f59e0b;
+            --secondary: #64748b;
+        }
+
+        body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); margin: 0; padding: 20px; }
+        .container { max-width: 1000px; margin: 0 auto; }
+        
+        /* Box y Formularios */
+        .box { background: var(--card); padding: 20px; border-radius: 15px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); margin-bottom: 30px; }
+        .form-grid { display: none; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; }
+        input, select, button { padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; }
+        .btn-save { background: var(--primary); color: white; border: none; font-weight: bold; cursor: pointer; }
+        .btn-edit { background: var(--edit); color: white; border: none; cursor: pointer; padding: 5px 10px; font-size: 12px; }
+
+        /* Estilo de la sección de Importar/Exportar */
+        .backup-zone { display: flex; gap: 10px; justify-content: center; margin-top: 20px; padding-top: 20px; border-top: 1px solid #e2e8f0; }
+        .btn-backup { background: var(--secondary); color: white; border: none; padding: 10px 15px; cursor: pointer; font-size: 12px; }
+
+        /* Grid de Horario */
+        .schedule-grid { display: grid; grid-template-columns: 1fr; gap: 20px; }
+        .active-courses { margin-bottom: 30px; }
+        .day-group { background: #e2e8f0; padding: 15px; border-radius: 15px; }
+        .day-title { text-align: center; color: #475569; margin-top: 0; }
+
+        /* Tarjeta de Curso */
+        .course-card { 
+            background: white; padding: 15px; border-radius: 10px; margin-bottom: 12px; 
+            border-left: 5px solid var(--primary); position: relative; cursor: pointer;
+        }
+        .course-card:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+        .edit-badge { position: absolute; top: 10px; right: 10px; font-size: 18px; opacity: 0.5; }
+
+        .course-card.normal {
+            background: white;
+            border-left: 5px solid #475569;
+        }
+
+        .course-card.in-progress {
+                background: #dcfce7;
+                border-left-color: #16a34a;
+                font-weight: 600;
+        }
+
+        .course-card.pulse-soon {
+                background: #fef3c7;
+                border-left-color: #f59e0b;
+                font-weight: 600;
+        }
+
+        /* Vista de Enfoque */
+        #focus-view { 
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; 
+            background: white; z-index: 1000; padding: 40px 20px; box-sizing: border-box; overflow-y: auto;
+        }
+        .focus-content { max-width: 800px; margin: 0 auto; }
+        .note-item { background: #fff9c4; padding: 12px; border-radius: 8px; margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center; border-left: 4px solid #facc15; }
+        .meet-btn { display: block; background: #059669; color: white; text-align: center; padding: 15px; border-radius: 10px; text-decoration: none; font-weight: bold; margin: 20px 0; }
+
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(255, 205, 23, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(16, 134, 79, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(16, 134, 79, 0); }
+        }
+
+        .pulse-soon {
+            animation: pulse 2s infinite;
+        }
+
+        .add-float {
+            position: fixed; bottom: 30px; right: 30px; width: 50px; height: 50px; 
+            background: var(--primary); color: white; border: none; border-radius: 50%; 
+            font-size: 30px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+
+            &:hover {
+                box-shadow: 0 6px 12px rgba(0,0,0,0.3);
+            }
+            &:active {
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div id="main-ui" class="container">
+    <h1 style="text-align: center; color: var(--primary);">Horarios</h1>
+
+    <div class="box">
+        <h3 id="form-title">Nuevo Curso</h3>
+        <button class="btn-save" style="width: 100%; margin-bottom: 15px;" onclick="toggleFormGrid()">Agregar Nuevo Curso</button>
+        <div class="form-grid">
+            <input type="hidden" id="edit-id">
+            <select id="f-day"><option>Lunes</option><option>Martes</option><option>Miércoles</option><option>Jueves</option><option>Viernes</option><option>Sábado</option></select>
+            <input type="time" id="f-time">
+            <input type="time" id="f-timeFin">
+            <input type="text" id="f-name" placeholder="Nombre (Ej: Redes 2)">
+            <input type="url" id="f-link" placeholder="Link de Meet">
+            <button class="btn-save" id="btn-submit" onclick="handleCourseSubmit()">Guardar Curso</button>
+            <button id="btn-cancel" style="display:none; background:#94a3b8; color:white;" onclick="resetForm()">Cancelar</button>
+        </div>
+
+        <div class="backup-zone">
+            <button class="btn-backup" onclick="exportData()">Exportar JSON</button>
+            <button class="btn-backup" onclick="document.getElementById('importFile').click()">Importar JSON</button>
+            <input type="file" id="importFile" style="display:none" accept=".json" onchange="importData(event)">
+        </div>
+    </div>
+     <div id="schedule-container-active" class="schedule-grid active-courses"></div>
+    <div id="schedule-container-soon" class="schedule-grid active-courses"></div>
+    <div id="schedule-container" class="schedule-grid"></div>
+
+</div>
+
+<div id="focus-view">
+    <div class="focus-content">
+        <button onclick="closeFocusView()" style="cursor:pointer; padding:8px; border-radius:5px; border:none; background:#64748b; color:white;">← Volver</button>
+        <h1 id="focus-course-name"></h1>
+        <p id="focus-course-info"></p>
+        <a id="focus-meet-link" href="#" target="_blank" class="meet-btn">UNIRSE A LA CLASE</a>
+
+        <div class="box" style="background: #f1f5f9;">
+            <h3>Notas Importantes</h3>
+            <div id="focus-notes-list"></div>
+            <div style="display: flex; gap: 10px; margin-top: 20px;">
+                <input type="hidden" id="edit-note-id">
+                <input type="text" id="new-note-input" style="flex: 1" placeholder="Escribe una nota...">
+                <button class="btn-save" id="btn-note-submit" onclick="handleNoteSubmit()">Añadir</button>
+            </div>
+        </div>
+        <button onclick="deleteCourse()" style="color: #ef4444; background: none; border: none; cursor: pointer; font-size: 13px;">Eliminar curso completo</button>
+    </div>
+</div>
+
+<button class="add-float" onclick="showAddCourseForm()">+</button>
+
+<script>
+    let courses = JSON.parse(localStorage.getItem('academic_v5')) || [];
+    let currentCourseId = null;
+
+    function showAddCourseForm() {
+        window.scrollTo(0,0);
+    }
+
+    // --- FUNCIONES DE EXPORTAR/IMPORTAR ---
+    function exportData() {
+        if(courses.length === 0) return alert("No hay datos para exportar");
+        const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(courses));
+        const downloadAnchorNode = document.createElement('a');
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", "horario_backup.json");
+        document.body.appendChild(downloadAnchorNode);
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+    }
+
+    function importData(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const importedCourses = JSON.parse(e.target.result);
+                if (Array.isArray(importedCourses)) {
+                    courses = importedCourses;
+                    saveAndRender();
+                    alert("Datos importados con éxito");
+                }
+            } catch (err) {
+                alert("Error al leer el archivo JSON");
+            }
+        };
+        reader.readAsText(file);
+    }
+
+    // --- FUNCIÓN PARA VERIFICAR SI UN CURSO ESTÁ PRÓXIMO ---
+    function isCourseSoon(courseTime, courseEndTime) {
+        const now = new Date();
+    
+        // Función auxiliar para convertir "HH:mm" a un objeto Date de hoy
+        const parseTime = (timeStr) => {
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            const date = new Date();
+            date.setHours(hours, minutes, 0, 0);
+            return date;
+        };
+
+        const startTime = parseTime(courseTime);
+        const endTime = parseTime(courseEndTime);
+
+        // 2. ¿Faltan menos de 15 minutos para que empiece?
+        const diffToStart = (startTime - now) / (1000 * 60);
+        const isSoon = diffToStart > 0 && diffToStart <= 15;
+
+    
+    return isSoon;
+    }
+
+    function isCourseInProgress(courseTime, courseEndTime) {
+        const now = new Date();
+    
+        // Función auxiliar para convertir "HH:mm" a un objeto Date de hoy
+        const parseTime = (timeStr) => {
+            const [hours, minutes] = timeStr.split(':').map(Number);
+            const date = new Date();
+            date.setHours(hours, minutes, 0, 0);
+            return date;
+        };
+
+        const startTime = parseTime(courseTime);
+        const endTime = parseTime(courseEndTime);
+
+        return now >= startTime && now <= endTime;
+    }
+
+    // --- LÓGICA DE CURSOS ---
+    function handleCourseSubmit() {
+        const id = document.getElementById('edit-id').value;
+        const name = document.getElementById('f-name').value;
+        const time = document.getElementById('f-time').value;
+        const timeFin = document.getElementById('f-timeFin').value;
+        const link = document.getElementById('f-link').value;
+        const day = document.getElementById('f-day').value;
+
+        if(!name || !time || !timeFin) return alert("Nombre y hora obligatorios");
+
+        if(id) {
+            const index = courses.findIndex(c => c.id == id);
+            courses[index] = { ...courses[index], name, time, timeFin, link, day };
+        } else {
+            courses.push({ id: Date.now(), day, time, timeFin, name, link, notes: [] });
+        }
+        saveAndRender(); resetForm();
+    }
+
+    function editCourse(id, event) {
+        const c = courses.find(course => course.id === id);
+        if(!c) return;
+        const formGrid = document.querySelector('.form-grid');
+        if(formGrid.style.display !== 'grid') formGrid.style.display = 'grid';
+        event.stopPropagation();
+        document.getElementById('edit-id').value = c.id;
+        document.getElementById('f-name').value = c.name;
+        document.getElementById('f-time').value = c.time;
+        document.getElementById('f-timeFin').value = c.timeFin;
+        document.getElementById('f-link').value = c.link;
+        document.getElementById('f-day').value = c.day;
+        document.getElementById('form-title').innerText = "Editando Curso";
+        document.getElementById('btn-submit').innerText = "Actualizar";
+        document.getElementById('btn-cancel').style.display = "block";
+        window.scrollTo(0,0);
+    }
+
+    function resetForm() {
+        toggleFormGrid();
+        document.getElementById('edit-id').value = '';
+        document.getElementById('f-name').value = '';
+        document.getElementById('f-time').value = '';
+        document.getElementById('f-timeFin').value = '';
+        document.getElementById('f-link').value = '';
+        document.getElementById('form-title').innerText = "Nuevo Curso";
+        document.getElementById('btn-submit').innerText = "Guardar Curso";
+        document.getElementById('btn-cancel').style.display = "none";
+    }
+
+    // --- LÓGICA DE NOTAS ---
+    function handleNoteSubmit() {
+        const input = document.getElementById('new-note-input');
+        const noteId = document.getElementById('edit-note-id').value;
+        if(!input.value) return;
+        const course = courses.find(c => c.id === currentCourseId);
+        if(noteId) {
+            const note = course.notes.find(n => n.id == noteId);
+            note.text = input.value;
+        } else {
+            course.notes.push({ id: Date.now(), text: input.value });
+        }
+        document.getElementById('edit-note-id').value = '';
+        document.getElementById('btn-note-submit').innerText = "Añadir";
+        input.value = ''; save(); renderFocusNotes();
+    }
+
+    function editNote(noteId) {
+        const course = courses.find(c => c.id === currentCourseId);
+        const note = course.notes.find(n => n.id === noteId);
+        document.getElementById('new-note-input').value = note.text;
+        document.getElementById('edit-note-id').value = note.id;
+        document.getElementById('btn-note-submit').innerText = "Editar";
+    }
+
+    function openFocusView(id) {
+        currentCourseId = id;
+        const course = courses.find(c => c.id === id);
+        document.getElementById('focus-course-name').innerText = course.name;
+        document.getElementById('focus-course-info').innerText = `${course.day} | ${course.time} - ${course.timeFin}`;
+        document.getElementById('focus-meet-link').href = course.link || '#';
+        document.getElementById('focus-meet-link').style.display = course.link ? 'block' : 'none';
+        renderFocusNotes();
+        document.getElementById('main-ui').style.display = 'none';
+        document.getElementById('focus-view').style.display = 'block';
+    }
+
+    function closeFocusView() {
+        document.getElementById('main-ui').style.display = 'block';
+        document.getElementById('focus-view').style.display = 'none';
+    }
+
+    function toggleFormGrid() {
+        const formGrid = document.querySelector('.form-grid');
+        formGrid.style.display = formGrid.style.display === 'grid' ? 'none' : 'grid';
+    }
+
+    function renderFocusNotes() {
+        const list = document.getElementById('focus-notes-list');
+        const course = courses.find(c => c.id === currentCourseId);
+        list.innerHTML = course.notes.length ? '' : '<p>No hay notas guardadas.</p>';
+        course.notes.forEach(n => {
+            list.innerHTML += `
+                <div class="note-item">
+                    <span>${n.text}</span>
+                    <div>
+                        <button class="btn-edit" onclick="editNote(${n.id})">✎</button>
+                        <button onclick="deleteNote(${n.id})" style="border:none; background:none; color:red; cursor:pointer;">✕</button>
+                    </div>
+                </div>`;
+        });
+    }
+
+    function deleteNote(noteId) {
+        if(!confirm("¿Eliminar esta nota?")) return;
+        const course = courses.find(c => c.id === currentCourseId);
+        course.notes = course.notes.filter(n => n.id !== noteId);
+        save(); renderFocusNotes();
+    }
+
+    function deleteCourse() {
+        if(confirm("¿Borrar curso?")) {
+            courses = courses.filter(c => c.id !== currentCourseId);
+            saveAndRender(); closeFocusView();
+        }
+    }
+
+    function save() { localStorage.setItem('academic_v5', JSON.stringify(courses)); }
+    function saveAndRender() { save(); renderSchedule(); }
+
+    function renderSchedule() {
+        const container = document.getElementById('schedule-container');
+        container.innerHTML = '';
+        const days = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+        days.filter(d => courses.some(c => c.day === d)).forEach(day => {
+            let html = `<div class="day-group"><h3 class="day-title">${day}</h3>`;
+            courses.filter(c => c.day === day).sort((a,b) => a.time.localeCompare(b.time)).forEach(c => {
+                const isPulse = isCourseSoon(c.time, c.timeFin);
+                const inProgress = isCourseInProgress(c.time, c.timeFin);
+                html += `
+                <div class="course-card ${isPulse ? 'pulse-soon' : 'normal'} ${inProgress ? 'in-progress' : 'normal'}" onclick="openFocusView(${c.id})">
+                    <span class="edit-badge" onclick="editCourse(${c.id}, event)">✎</span>
+                    <small>${c.time} - ${c.timeFin} ${inProgress ? '| En curso' : ''} ${isPulse ? '| Por empezar' : ''} </small>
+                    <h4>${c.name}</h4>
+                </div>`;
+            });
+            container.innerHTML += html + `</div>`;
+        });
+    }
+
+    function renderActiveCourses() {
+        const container = document.getElementById('schedule-container-active');
+        container.innerHTML = '';
+        const activeCourses = courses.filter(c => isCourseInProgress(c.time, c.timeFin));
+        if(activeCourses.length === 0) {
+            container.style.display = 'none';
+            return;
+        }
+        container.style.display = 'grid';
+        let html = `<div class="day-group"><h3 class="day-title">Clase en curso</h3>`;
+        activeCourses.sort((a,b) => a.time.localeCompare(b.time)).forEach(c => {
+            html += `
+            <div class="course-card in-progress" onclick="openFocusView(${c.id})">
+                <small>${c.day} ${c.time} - ${c.timeFin} | En curso</small>
+                <h4>${c.name}</h4>
+            </div>`;
+        });
+        container.innerHTML = html + `</div>`;
+    }
+
+    function renderScheduleSoon() {
+        const container = document.getElementById('schedule-container-soon');
+        container.innerHTML = '';
+        const soonCourses = courses.filter(c => isCourseSoon(c.time, c.timeFin));
+        if(soonCourses.length === 0) {
+            container.style.display = 'none';
+            return;
+        }
+        container.style.display = 'grid';
+        let html = `<div class="day-group"><h3 class="day-title">Próximas clases</h3>`;
+        soonCourses.sort((a,b) => a.time.localeCompare(b.time)).forEach(c => {
+            html += `
+            <div class="course-card pulse-soon" onclick="openFocusView(${c.id})">
+                <small>${c.day} ${c.time} - ${c.timeFin} | Por empezar</small>
+                <h4>${c.name}</h4>
+            </div>`;
+        });
+        container.innerHTML = html + `</div>`;
+    }
+
+
+    renderSchedule();
+    renderActiveCourses();
+    renderScheduleSoon();
+    // Actualizar cada minuto para verificar cursos próximos
+    setInterval(() => {
+        renderSchedule();
+        renderActiveCourses();
+        renderScheduleSoon();
+    }, 30000);
+    
+</script>
+</body>
+</html>
