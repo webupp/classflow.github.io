@@ -100,7 +100,6 @@
 
     <div class="box">
         <h3 id="form-title">Nuevo Curso</h3>
-        <button class="btn-save" style="width: 100%; margin-bottom: 15px;" onclick="toggleFormGrid()">Agregar Nuevo Curso</button>
         <div class="form-grid">
             <input type="hidden" id="edit-id">
             <select id="f-day"><option>Lunes</option><option>Martes</option><option>Miércoles</option><option>Jueves</option><option>Viernes</option><option>Sábado</option></select>
@@ -144,14 +143,15 @@
     </div>
 </div>
 
-<button class="add-float" onclick="showAddCourseForm()">+</button>
+<button class="add-float" onclick="menu()">+</button>
 
 <script>
     let courses = JSON.parse(localStorage.getItem('academic_v5')) || [];
     let currentCourseId = null;
 
-    function showAddCourseForm() {
+    function menu() {
         window.scrollTo(0,0);
+        toggleFormGrid();
     }
 
     // --- FUNCIONES DE EXPORTAR/IMPORTAR ---
@@ -186,7 +186,7 @@
     }
 
     // --- FUNCIÓN PARA VERIFICAR SI UN CURSO ESTÁ PRÓXIMO ---
-    function isCourseSoon(courseTime, courseEndTime) {
+    function isCourseSoon(courseTime, courseEndTime, day) {
         const now = new Date();
     
         // Función auxiliar para convertir "HH:mm" a un objeto Date de hoy
@@ -203,12 +203,13 @@
         // 2. ¿Faltan menos de 15 minutos para que empiece?
         const diffToStart = (startTime - now) / (1000 * 60);
         const isSoon = diffToStart > 0 && diffToStart <= 15;
-
+        const courseDayIndex = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"].indexOf(day.toLowerCase());
+        const nowDayIndex = now.getDay();
     
-    return isSoon;
+    return isSoon && courseDayIndex === nowDayIndex;
     }
 
-    function isCourseInProgress(courseTime, courseEndTime) {
+    function isCourseInProgress(courseTime, courseEndTime, day) {
         const now = new Date();
     
         // Función auxiliar para convertir "HH:mm" a un objeto Date de hoy
@@ -221,8 +222,10 @@
 
         const startTime = parseTime(courseTime);
         const endTime = parseTime(courseEndTime);
+        const courseDayIndex = ["domingo", "lunes", "martes", "miércoles", "jueves", "viernes", "sábado"].indexOf(day.toLowerCase());
+        const nowDayIndex = now.getDay();
 
-        return now >= startTime && now <= endTime;
+        return now >= startTime && now <= endTime && courseDayIndex === nowDayIndex;
     }
 
     // --- LÓGICA DE CURSOS ---
@@ -339,17 +342,18 @@
     }
 
     function deleteNote(noteId) {
-        if(!confirm("¿Eliminar esta nota?")) return;
-        const course = courses.find(c => c.id === currentCourseId);
-        course.notes = course.notes.filter(n => n.id !== noteId);
-        save(); renderFocusNotes();
+        openModal("Confirmar eliminación", "¿Eliminar esta nota?", () => {
+            const course = courses.find(c => c.id === currentCourseId);
+            course.notes = course.notes.filter(n => n.id !== noteId);
+            save(); renderFocusNotes();
+        });
     }
 
     function deleteCourse() {
-        if(confirm("¿Borrar curso?")) {
+        openModal("Confirmar eliminación", "¿Eliminar este curso completo?", () => {
             courses = courses.filter(c => c.id !== currentCourseId);
             saveAndRender(); closeFocusView();
-        }
+        });
     }
 
     function save() { localStorage.setItem('academic_v5', JSON.stringify(courses)); }
@@ -362,8 +366,8 @@
         days.filter(d => courses.some(c => c.day === d)).forEach(day => {
             let html = `<div class="day-group"><h3 class="day-title">${day}</h3>`;
             courses.filter(c => c.day === day).sort((a,b) => a.time.localeCompare(b.time)).forEach(c => {
-                const isPulse = isCourseSoon(c.time, c.timeFin);
-                const inProgress = isCourseInProgress(c.time, c.timeFin);
+                const isPulse = isCourseSoon(c.time, c.timeFin, c.day);
+                const inProgress = isCourseInProgress(c.time, c.timeFin, c.day);
                 html += `
                 <div class="course-card ${isPulse ? 'pulse-soon' : 'normal'} ${inProgress ? 'in-progress' : 'normal'}" onclick="openFocusView(${c.id})">
                     <span class="edit-badge" onclick="editCourse(${c.id}, event)">✎</span>
@@ -378,7 +382,7 @@
     function renderActiveCourses() {
         const container = document.getElementById('schedule-container-active');
         container.innerHTML = '';
-        const activeCourses = courses.filter(c => isCourseInProgress(c.time, c.timeFin));
+        const activeCourses = courses.filter(c => isCourseInProgress(c.time, c.timeFin, c.day));
         if(activeCourses.length === 0) {
             container.style.display = 'none';
             return;
@@ -398,7 +402,7 @@
     function renderScheduleSoon() {
         const container = document.getElementById('schedule-container-soon');
         container.innerHTML = '';
-        const soonCourses = courses.filter(c => isCourseSoon(c.time, c.timeFin));
+        const soonCourses = courses.filter(c => isCourseSoon(c.time, c.timeFin, c.day));
         if(soonCourses.length === 0) {
             container.style.display = 'none';
             return;
@@ -425,7 +429,50 @@
         renderActiveCourses();
         renderScheduleSoon();
     }, 30000);
-    
+
+
+    // --- FUNCIONES PARA MODAL ---
+    function openModal(title, message, onConfirm) {
+        const modal = document.createElement('div');
+        modal.id = 'custom-modal';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        `;
+        
+        modal.innerHTML = `
+            <div style="background: white; padding: 30px; border-radius: 15px; max-width: 400px; box-shadow: 0 10px 40px rgba(0,0,0,0.2);">
+                <h2 style="margin-top: 0; color: var(--primary);">${title}</h2>
+                <p style="color: var(--secondary); margin: 15px 0;">${message}</p>
+                <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                    <button onclick="closeModal()" style="background: #cbd5e1; color: white; padding: 10px 15px; border: none; border-radius: 8px; cursor: pointer;">Cancelar</button>
+                    <button onclick="confirmModal()" class="btn-save" style="padding: 10px 15px;">Confirmar</button>
+                </div>
+            </div>
+        `;
+        
+        document.body.appendChild(modal);
+        window.modalCallback = onConfirm;
+    }
+
+    function closeModal() {
+        const modal = document.getElementById('custom-modal');
+        if(modal) modal.remove();
+    }
+
+    function confirmModal() {
+        if(window.modalCallback) window.modalCallback();
+        closeModal();
+    }
+
 </script>
 </body>
 </html>
